@@ -1,0 +1,248 @@
+---
+title: "Freddie Flex Vignette"
+resource_files:
+- FreddieFlexDataGrab.R
+- SourceData.RDat
+runtime: shiny
+output:
+  flexdashboard::flex_dashboard:
+    source_code: embed
+---
+
+```{r setup, include=FALSE}
+# Load packages and initialize data here
+library(flexdashboard)
+library(dygraphs)
+library(leaflet)
+library(stringr)
+
+##load data
+load('SourceData.RDat')
+
+##build metros map
+HpaPal<-colorNumeric(
+  palette = "GnBu",
+  domain = Metros_Only_500k$hpa
+)
+
+DiffPal <- colorNumeric(
+  palette = "GnBu",
+  domain = Metros_Only_500k$PeakDiff
+)
+
+MetroPopup <- paste0("<strong>Metro Area: </strong>", 
+                     Metros_Only_500k$NAME, 
+                    "<br><strong>Annual House Price Percent Change: </strong>", 
+                     Metros_Only_500k$hpa, "%",
+                    "<br><strong>Percent Above/Below Pre-08 Peak </strong>", 
+                     Metros_Only_500k$PeakDiff, "%"
+                    ##"<br><strong>Percent Above/Below 2008-2016 Trough </strong>", 
+                     ##Metros_Only_500k$percentChange08_16Trough, "%"
+                    )
+
+leaf_metro_1 <- leaflet(Metros_Only_500k) %>% addProviderTiles("CartoDB.Positron") %>%   
+  setView(-95, 40, zoom = 4) %>% 
+  addPolygons(stroke = TRUE, color = "black", weight = .4, opacity = 1.0, smoothFactor = 0.5, 
+             fill = TRUE, fillColor = ~HpaPal(hpa), fillOpacity = .8, layerId = ~NAME, popup =
+             MetroPopup) %>% 
+  addLegend("bottomright", pal = HpaPal, values = ~hpa, title = "Annual HPA", labFormat =
+              labelFormat(suffix = "%"),opacity = 1)
+
+leaf_metro_2 <- leaflet(Metros_Only_500k) %>% addProviderTiles("CartoDB.Positron") %>%   
+  setView(-95, 40, zoom = 4) %>% 
+  addPolygons(stroke = TRUE, color = "black", weight = .4, opacity = 1.0, smoothFactor = 0.5, 
+             fill = TRUE, fillColor = ~DiffPal(PeakDiff), fillOpacity = .8, layerId = ~NAME, popup =
+             MetroPopup) %>% 
+  addLegend("bottomright", pal = DiffPal, values = ~PeakDiff, title = "Diff from 08 Peak", labFormat
+            = labelFormat(suffix = "%"),opacity = 1)
+
+###build states map
+statesPal<-colorNumeric(
+  palette = "GnBu",
+  domain = states500k$hpa
+)
+
+
+statesPopup <- paste0("<strong>State: </strong>", 
+                    states500k$NAME, 
+                    "<br><strong>Annual House Price Percent Change: </strong>", 
+                     states500k$hpa, "%",
+                    "<br><strong>Percent Above/Below Pre-08 Peak </strong>", 
+                     states500k$PeakDiff, "%"
+                    )
+
+leaf_states <- leaflet(states500k) %>% addProviderTiles("CartoDB.Positron") %>%   
+  setView(-95, 40, zoom = 4) %>% 
+  addPolygons(stroke = TRUE, color = "black", weight = .4, opacity = 1.0, smoothFactor = 0.5, 
+  fill = TRUE, fillColor = ~statesPal(hpa), fillOpacity = .8, layerId = ~STATEABB, popup =    
+  statesPopup) %>% 
+  addLegend("bottomright", pal = statesPal, values = ~hpa, title = "Annual HPA", labFormat =
+              labelFormat(suffix = "%"),opacity = 1)
+```
+
+House Prices by Metro {data-orientation=rows}
+=====================================
+
+Sidebar {.sidebar data-width=200}
+-------------------------------------
+  
+```{r}
+
+helpText("Select housing price time series")
+
+selectInput("indicatorselect1", "Choose a time series", 
+                          choices = c("Housing Price Index", "Rolling HPI", 
+                                      "Annual Percent Change HPI"))
+
+```
+
+Row {data-height=650}
+-------------------------------------
+
+### USA Metros
+
+```{r, echo = FALSE}
+
+leafletOutput("metromap1")
+
+  output$metromap1 <- renderLeaflet({
+    leaf_metro_1
+  })
+
+```
+
+Row {data-height=350}
+-------------------------------------
+
+### Metro HPI over Time (indexed to 100 in year 2000)
+
+```{r}
+##get the metro that was clicked on
+
+dygraphOutput("dygraph1")
+
+clickedMetro1 <- eventReactive(input$metromap1_shape_click, {
+     return(input$metromap1_shape_click$id)
+     })
+
+output$dygraph1 <- renderDygraph({
+      Metro<-as.character(clickedMetro1())
+      FirstChar<-word(Metro, 1, sep = "-")
+      FirstChar2<-word(FirstChar, 1, sep=",")
+      LastChar<-word(Metro, -1, sep=", ")
+      finalMetro<-paste(FirstChar2, LastChar, sep=" ")
+      dygraph(metros_All_xts[, finalMetro], main = clickedMetro1()) %>%
+      dyRangeSelector(height = 20) %>%
+      dyAxis("y", label = "HPI", axisLabelFontSize = 10, axisLabelWidth = 70) %>% 
+      dyLimit(100, color = "red")
+})
+```
+
+Metros Relative to 08 Peak {data-orientation=rows}
+=====================================
+
+Sidebar {.sidebar data-width=200}
+-------------------------------------
+  
+```{r}
+
+helpText("Select housing price time series")
+
+selectInput("indicatorselect1", "Choose a time series", 
+                          choices = c("Housing Price Index", "Rolling HPI", 
+                                      "Annual Percent Change HPI"))
+
+```
+
+Row {data-height=650}
+-------------------------------------
+
+### USA Metros
+
+```{r, echo = FALSE}
+
+leafletOutput("metromap2")
+
+  output$metromap2 <- renderLeaflet({
+    leaf_metro_2
+  })
+
+```
+
+Row {data-height=350}
+-------------------------------------
+
+### Metro HPI over Time (indexed to 100 in year 2000)
+
+```{r}
+##get the metro that was clicked on
+
+dygraphOutput("dygraph2")
+
+clickedMetro2 <- eventReactive(input$metromap2_shape_click, {
+     return(input$metromap2_shape_click$id)
+     })
+
+output$dygraph2 <- renderDygraph({
+      Metro<-as.character(clickedMetro2())
+      FirstChar<-word(Metro, 1, sep = "-")
+      FirstChar2<-word(FirstChar, 1, sep=",")
+      LastChar<-word(Metro, -1, sep=", ")
+      finalMetro<-paste(FirstChar2, LastChar, sep=" ")
+      dygraph(metros_All_xts[, finalMetro], main = clickedMetro2()) %>%
+      dyRangeSelector(height = 20) %>%
+      dyAxis("y", label = "HPI", axisLabelFontSize = 10, axisLabelWidth = 70) %>% 
+      dyLimit(100, color = "red")
+})
+```
+
+House Prices by State {data-orientation=rows}
+=====================================
+
+Sidebar {.sidebar data-width=200}
+-------------------------------------
+  
+```{r}
+
+helpText("Select housing price time series")
+
+selectInput("indicatorselect1", "Choose a time series", 
+                          choices = c("Housing Price Index", "Rolling HPI", 
+                                      "Annual Percent Change HPI"))
+
+```
+
+Row {data-height=650}
+-------------------------------------
+
+### USA States
+
+```{r, echo = FALSE}
+
+leafletOutput("map3")
+
+  output$map3 <- renderLeaflet({
+    leaf_states
+  })
+```
+
+Row {data-height=350}
+-------------------------------------
+
+### State HPI over Time (indexed to 100 in year 2000)
+
+```{r}
+
+dygraphOutput("dygraph3")
+
+clickedState <- eventReactive(input$map3_shape_click, {
+     return(input$map3_shape_click$id)
+     })
+
+output$dygraph3 <- renderDygraph({
+      dygraph(states_xts[, as.character(clickedState())], main = clickedState()) %>%
+      dyRangeSelector(height = 20) %>%
+      dyAxis("y", label = "HPI", axisLabelFontSize = 10, axisLabelWidth = 70) %>% 
+      dyLimit(100, color = "red")
+})
+```
