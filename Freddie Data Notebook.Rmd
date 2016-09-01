@@ -1,8 +1,9 @@
 ---
 title: "Freddie Data Notebook"
-output: html_notebook
-resource_files:
-- states.xls
+resource_files: states.xls
+output:
+  html_notebook: default
+  pdf_document: default
 ---
 
 

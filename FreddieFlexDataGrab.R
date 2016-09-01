@@ -11,9 +11,6 @@ library(reshape2)
 library(xts)
 
 
-##set wd
-setwd("~/FreddieMac")
-
 ##load the cbsa shapefile
 metros500k<-readOGR(".", "cb_2015_us_cbsa_500k", verbose = FALSE)
 
@@ -29,6 +26,16 @@ msas_A_L <- read_excel("~/FreddieMac/metros.xls",
                        sheet = "MSA Indices A-L", skip = 4)
 colnames(msas_A_L)=msas_A_L[1,]
 msas_A_L=msas_A_L[c(-1, -495:-551),]
+
+msas_new_AL <- read_excel("msas_new.xls", 
+                       sheet = "MSA Indices A-L", skip = 4)
+colnames(msas_new_AL)=msas_new_AL[1,]
+msas_new_AL=msas_new_AL[c(-1, -500:-555),]
+
+msas_new_MZ <- read_excel("msas_new.xls", 
+                          sheet = "MSA Indices M-Z", skip = 4)
+colnames(msas_new_MZ)=msas_new_MZ[1,]
+msas_new_MZ=msas_new_MZ[c(-1, -500:-516),-1]
 
 ##get the metro county data sheet 2, remove first 4 rows, blank last AND
 ##remove the date column
@@ -65,9 +72,24 @@ metros_01_08<- metros_All %>%
   group_by(metro) %>% 
   top_n(1, maxHPI) 
   
-Metros_Only_500k$PeakDiff <- round(MetrosHpa$`2016-01-01` - metros_01_08$maxHPI, digits =2)
+Metros_Only_500k$CurrentDiff <- round(MetrosHpa$`2016-01-01` - metros_01_08$maxHPI, digits =2)
 
 
+##add HPA to shapefile
+Metros_Only_500k$hpaTest <-  
+  
+  metros_All %>%  
+  filter(date == ymd("2016-01-01") | date == ymd("2015-01-01")) %>%
+  gather(metro, value, -date) %>%
+  spread(date, value) %>% 
+  mutate(hpa = (((1+(.[[3]]-.[[2]])/.[[2]])^1)-1)*100) %>%
+  transmute(hpa = round(hpa, digits =2)) 
+
+Metros_Only_500k$hpa <- round(MetrosHpa$hpa, digits = 2)
+
+
+
+##misc
 metros_MinPostCrash <- metros_melted %>% group_by(metro) %>% 
   filter(date > "2008-01-01" & date <"2016-02-01") %>%
   top_n(-1, hpi)
@@ -77,17 +99,6 @@ df$troughDiffPost2008 <- df$Year2 - metros_MinPostCrash$hpi
 
 Metros_Only_500k$percentChange08Peak <- round(df$maxDiffPre2008, digits = 2)
 Metros_Only_500k$percentChange08_16Trough <- round(df$troughDiffPost2008, digits = 2)
-
-
-##add HPA to shapefile
-MetrosHpa <-metros_All %>%  
-  filter(date == ymd("2016-01-01") | date == ymd("2015-01-01")) %>%
-  gather(metro, value, -date) %>%
-  spread(date, value) %>% 
-  mutate(hpa= (((1+(.[[3]]-.[[2]])/.[[2]])^1)-1)*100) %>%
-  mutate(hpa = round(hpa, digits =2)) 
-
-Metros_Only_500k$hpa <- round(MetrosHpa$hpa, digits = 2)
 
 
 
@@ -101,7 +112,7 @@ colnames(states500k@data)[5] <- "STATEABB"
 states500k <-states500k[order(states500k$STATEABB),]
 
 ##get the state data to start playing with
-states   <- read_excel("~/sol-eng-sales/JKR_Data/Freddie_Data/states.xls", 
+states   <- read_excel("~/FreddieMac/states.xls", 
                        skip = 4)
 
 ##rename the columns by state abbreviation and remove the unneeded rows at the bottom
@@ -114,16 +125,16 @@ states$date<-seq(mdy('01/01/1975'),mdy('03/01/2016'),by='months')
 
 ##make sure the columns are numeric. Why necessary? read_excel imported the data as characters
 ##because of the characters in the original excel file
-states[,c(2:54)] = apply(states[,c(2:54)], 2, function(x) as.numeric(x))
+states[,c(2:52)] = apply(states[,c(2:52)], 2, function(x) as.numeric(x))
 
 ##another way to accomplish the same thing turn to numeric first, then add date
 ##states <- lapply(states[,2:54], as.numeric)
 ##states$date<-seq(mdy('01/01/1975'),mdy(names <- c("United", "DC")
 
 ##remove the last two columns, because those united states adujusted. 
-states_DC<-states[,-53:-54]
+##states_DC<-states[,-53:-54]
 
-StatesHpa <-states_DC %>%  
+StatesHpa <-states %>%  
   filter(date == ymd("2016-03-01") | date == ymd("2015-03-01")) %>%
   gather(state,value, -date) %>%
   spread(date,value) %>% 
@@ -132,7 +143,7 @@ StatesHpa <-states_DC %>%
 
 states500k$hpa <- StatesHpa$hpa
 
-states_00_08<- states_DC %>%  
+states_00_08<- states %>%  
   gather("state", "maxHPI", -date) %>% 
   filter(date > "2000-01-01" & date <"2008-06-01") %>%
   group_by(state) %>% 
@@ -145,4 +156,4 @@ states500k$PeakDiff <- round(StatesHpa$`2016-03-01` - states_00_08$maxHPI, digit
 metros_All_xts <-xts(metros_All, order.by=as.Date(metros_All$date))
 states_xts <-xts(states, order.by = as.Date(states$date))
 ### Save
-save(metros_All_xts, Metros_Only_500k, states_xts, states500k, file = 'SourceData.RDat')
+save(metros_All_xts, Metros_Only_500k, states_xts, states500k, dfmetro, metros_All, file = 'SourceData.RDat')

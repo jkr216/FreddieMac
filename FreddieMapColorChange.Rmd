@@ -1,0 +1,97 @@
+---
+title: "Freddie Map Color Change"
+resource_files:
+- FreddieFlexDataGrab.R
+- SourceData.RDat
+runtime: shiny
+output:
+  flexdashboard::flex_dashboard:
+    source_code: embed
+---
+
+```{r setup, include=FALSE}
+# Load packages and initialize data here
+library(flexdashboard)
+library(dygraphs)
+library(leaflet)
+library(stringr)
+
+##load data
+load('SourceData.RDat')
+
+##build metros map
+hpaPal<-colorNumeric(
+  palette = "GnBu",
+  domain = Metros_Only_500k$hpa
+)
+
+MetroPopup <- paste0("Metro Area: ", 
+                     Metros_Only_500k$NAME, 
+                    "Annual House Price Percent Change: ", 
+                     Metros_Only_500k$hpa, "%"
+                    ##"Percent Above/Below Pre-08 Peak ", 
+                     #Metros_Only_500k$PeakDiff, "%"
+                    ##"Percent Above/Below 2008-2016 Trough ", 
+                     ##Metros_Only_500k$percentChange08_16Trough, "%"
+                    )
+
+```
+
+House Prices by Metro {data-orientation=rows}
+=====================================
+
+Sidebar {.sidebar data-width=200}
+-------------------------------------
+  
+```{r}
+selectInput("indicatorselect1", "Choose something", 
+                          choices = c("hpa",
+                                    "Pre08MaxDiff", 
+                                    "PostCrashTroughDiff"))
+```
+
+Row {data-height=650}
+-------------------------------------
+
+### USA Metros
+
+```{r}
+leafletOutput("map1")
+
+output$map1 <- renderLeaflet({
+  
+  leaflet(Metros_Only_500k) %>% 
+  addProviderTiles("CartoDB.Positron") %>%   
+  setView(-95, 40, zoom = 4) %>% 
+  addPolygons(stroke = TRUE, color = "black", weight = .4, opacity = 1.0, smoothFactor = 0.5, 
+             fill = TRUE, fillColor = ~hpaPal(hpa), fillOpacity = .8, layerId = ~NAME, popup =
+             MetroPopup)
+})
+
+observeEvent(input$indicatorselect1, {
+      #  let's create a new palette based on the input selected
+      indicator <- as.character(input$indicatorselect1)
+      Pal <- colorNumeric( 
+        palette = "GnBu",
+        domain = Metros_Only_500k[[indicator]]
+        )
+      
+      MetroPopup <- paste0("<strong>Metro Area: </strong><br>", 
+                     Metros_Only_500k$NAME,"<br>",  
+                     indicator, ":",
+                     Metros_Only_500k[[indicator]], "%"
+                    )
+      
+      leafletProxy( "map1", data = Metros_Only_500k) %>%
+        removeShape( layerId = ~NAME ) %>%
+        addProviderTiles("CartoDB.Positron") %>%   
+        setView(-95, 40, zoom = 4) %>%
+        addPolygons(stroke = TRUE, color = "black", weight = .4, opacity = 1.0, smoothFactor = 0.5, 
+             fill = TRUE, fillColor = ~Pal(Metros_Only_500k[[indicator]]), fillOpacity = .8, layerId = ~NAME,
+             popup = MetroPopup)
+    })
+
+```
+
+
+
