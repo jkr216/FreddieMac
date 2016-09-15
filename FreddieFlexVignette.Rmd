@@ -15,6 +15,8 @@ library(flexdashboard)
 library(dygraphs)
 library(leaflet)
 library(stringr)
+library(DT)
+library(data.table)
 
 ##load data
 load('SourceData.RDat')
@@ -27,17 +29,13 @@ HpaPal<-colorNumeric(
 
 DiffPal <- colorNumeric(
   palette = "GnBu",
-  domain = Metros_Only_500k$PeakDiff
+  domain = Metros_Only_500k$Pre08MaxDiff
 )
 
 MetroPopup <- paste0("Metro Area: ", 
                      Metros_Only_500k$NAME, 
                     "Annual House Price Percent Change: ", 
-                     Metros_Only_500k$hpa, "%",
-                    "Percent Above/Below Pre-08 Peak ", 
-                     Metros_Only_500k$PeakDiff, "%"
-                    ##"Percent Above/Below 2008-2016 Trough ", 
-                     ##Metros_Only_500k$percentChange08_16Trough, "%"
+                     Metros_Only_500k$hpa, "%"
                     )
 
 leaf_metro_1 <- leaflet(Metros_Only_500k) %>% addProviderTiles("CartoDB.Positron") %>%   
@@ -51,9 +49,9 @@ leaf_metro_1 <- leaflet(Metros_Only_500k) %>% addProviderTiles("CartoDB.Positron
 leaf_metro_2 <- leaflet(Metros_Only_500k) %>% addProviderTiles("CartoDB.Positron") %>%   
   setView(-95, 40, zoom = 4) %>% 
   addPolygons(stroke = TRUE, color = "black", weight = .4, opacity = 1.0, smoothFactor = 0.5, 
-             fill = TRUE, fillColor = ~DiffPal(PeakDiff), fillOpacity = .8, layerId = ~NAME, popup =
+             fill = TRUE, fillColor = ~DiffPal(Pre08MaxDiff), fillOpacity = .8, layerId = ~NAME, popup =
              MetroPopup) %>% 
-  addLegend("bottomright", pal = DiffPal, values = ~PeakDiff, title = "Diff from 08 Peak", labFormat
+  addLegend("bottomright", pal = DiffPal, values = ~Pre08MaxDiff, title = "Diff from 08 Peak", labFormat
             = labelFormat(suffix = "%"),opacity = 1)
 
 ###build states map
@@ -61,7 +59,6 @@ statesPal<-colorNumeric(
   palette = "GnBu",
   domain = states500k$hpa
 )
-
 
 statesPopup <- paste0("State: ", 
                     states500k$NAME, 
@@ -90,9 +87,10 @@ Sidebar {.sidebar data-width=200}
 
 helpText("Select housing price time series")
 
-selectInput("indicatorselect1", "Choose a time series", 
-                          choices = c("Housing Price Index", "Rolling HPI", 
-                                      "Annual Percent Change HPI"))
+selectInput("indicatorselect1", "Choose something", 
+                          choices = c("hpa",
+                                    "Pre08MaxDiff", 
+                                    "PostCrashTroughDiff"))
 
 ```
 
@@ -105,9 +103,32 @@ Row {data-height=650}
 
 leafletOutput("metromap1")
 
-  output$metromap1 <- renderLeaflet({
+output$metromap1 <- renderLeaflet({
     leaf_metro_1
   })
+  
+observeEvent(input$indicatorselect1, {
+      #  let's create a new palette based on the input selected
+      indicator <- as.character(input$indicatorselect1)
+      Pal <- colorNumeric( 
+        palette = "GnBu",
+        domain = Metros_Only_500k[[indicator]]
+        )
+      
+      MetroPopup <- paste0("<strong>Metro Area: </strong><br>", 
+                     Metros_Only_500k$NAME,"<br>",  
+                     indicator, ":",
+                     Metros_Only_500k[[indicator]], "%"
+                    )
+      
+      leafletProxy( "metromap1", data = Metros_Only_500k) %>%
+        removeShape( layerId = ~NAME ) %>%
+        addProviderTiles("CartoDB.Positron") %>%   
+        setView(-95, 40, zoom = 4) %>%
+        addPolygons(stroke = TRUE, color = "black", weight = .4, opacity = 1.0, smoothFactor = 0.5, 
+             fill = TRUE, fillColor = ~Pal(Metros_Only_500k[[indicator]]), fillOpacity = .8, layerId = ~NAME,
+             popup = MetroPopup)
+    })
 
 ```
 
@@ -271,6 +292,3 @@ selectInput("indicatorselect1", "Choose a time series",
                                       "Annual Percent Change HPI"))
 
 ```
-
-New Page {data-orientation=rows}
-=====================================

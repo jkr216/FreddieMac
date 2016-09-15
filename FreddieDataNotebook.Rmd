@@ -1,0 +1,112 @@
+---
+title: "Freddie Data Notebook"
+resource_files: states.xls
+output:
+  html_notebook: default
+  pdf_document: default
+---
+
+
+```{r setup, message=FALSE}
+##load up the necessary packages
+library(readr)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(stringr)
+library(readxl)
+library(ggplot2)
+library(scales)
+library(zoo)
+##can you see my cursor? why are you using the zoo package here? are you working with time series?
+##indeed, i am
+```
+
+Import and tidy the data.
+
+```{r}
+##import the states data
+states  <- read_excel("states.xls", skip = 4)
+
+##rename the columns by state abbreviation and remove the unneeded rows at the bottom
+colnames(states)<-states[1,]
+states<-states[c(-1,-497:-512),]
+
+##replace the month column with a better named/formatted date column
+colnames(states)[1] <- "date"
+states$date<-seq(mdy('01/01/1975'),mdy('03/01/2016'),by='months')
+
+##make sure the columns are numeric. Why necessary? read_excel imported the data as characters
+##because of the NA characters in the original excel file
+states[,c(2:54)] = apply(states[,c(2:54)], 2, function(x) as.numeric(x))
+
+##manipulate and create new variables
+states_wrangled <-states  %>% 
+  ##gather from wide to long format
+  gather(state,hpi, -date) %>%
+  ##round hpi to four digits
+  mutate(hpi = round(hpi, digits = 4)) %>%
+  ##create a column called year and month by separating the date column
+  separate(date, into = c("year", "month"), sep = '-', convert = TRUE, remove = FALSE) %>% 
+  ##create new column: hpa, hpa12, hpa3 etc.
+  mutate(
+         hpa = ((1+(hpi-lag(hpi))/hpi)^12)-1, 
+         hpa12 = ((1+(hpi-lag(hpi, 12))/hpi)^1)-1, 
+         hpa3 = ((1+(hpi-lag(hpi, 3))/hpi)^4)-1,
+         hpi12 = lag(hpi, 12), 
+         hpi12min = rollapply(hpi, 12, min, fill=NA, na.rm=FALSE,align='right'),
+         hpi12max = rollapply(hpi, 12, max, fill=NA, na.rm=FALSE,align='right')
+  ) 
+
+```
+
+
+Let's create a visualization from lenkiefer.com/2016/05/08/visual-meditations-on-house-prices-part2
+to confirm the data object can be used for the same purposes.
+
+```{r}
+##remove DC and US totals so we just have the states
+names <- c("United", "DC")
+states_only<-filter(states_wrangled, !grepl(paste(names, collapse = '|'), state)) 
+
+## work with data from 1999-2016
+states_1999 <- states_only %>%
+  filter(date >= "1999-01-01")
+
+##drop the states_1999 object into the code used on the blog
+
+freddiePlot1<-
+  ggplot(states_1999, aes(x=date,y=hpi)) +
+  theme_minimal()+
+  scale_x_date(labels= date_format("%y"),date_breaks="4 year",
+               limits = as.Date(c('1999-01-01','2016-03-30'))) +
+  scale_y_log10(limits=c(70,350), breaks=c(75,100,125,150,200,250,350)) +
+  geom_line(color="black") + 
+  geom_point(data = subset(states_1999, year == 2016 & month == 3), 
+             aes(x=date,y=hpi), color="blue", alpha=0.7) +
+  facet_wrap(~state, ncol=10)
+
+freddiePlot1
+```
+
+Let's use the data object in one more chunk to make one more visualization.
+
+```{r}
+freddiePlot2 <-
+  ggplot(data=subset(states_1999, year==2016 & month==3), 
+         aes(x=hpi, y=state, label=state, color=hpa12)) +
+  geom_text(nudge_x = 0.025) +
+  geom_point() +
+  scale_x_log10(limits=c(70,350), breaks=c(70,100,150,250,350))+
+  geom_segment(aes(xend=hpi12min,x=hpi12max,y=state,yend=state),alpha=0.7)+
+  theme_minimal()  +
+  scale_colour_gradient(low="red",high="blue",name = "12-month HPA",labels = percent) +
+  labs(y="State", x= "House price index (log scale, Dec 2000 =100, NSA)",
+       title="State house price dynamics")
+
+freddiePlot2
+##why did you choose those colors? 
+```
+
+
+
