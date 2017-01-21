@@ -1,0 +1,147 @@
+---
+title: "Freddie Prerendered"
+resource_files:
+- metrosData.RDat
+runtime: shiny_prerendered
+output:
+  flexdashboard::flex_dashboard:
+    source_code: embed
+
+---
+
+```{r setup, include = FALSE}
+# Load packages and initialize data here
+library(flexdashboard)
+library(dygraphs)
+library(leaflet)
+```
+
+
+```{r data, cache = TRUE, include = FALSE}
+##load data
+load('metrosData.RDat')
+
+##build metros map
+HpaPal<-colorNumeric(
+  palette = "GnBu",
+  domain = metros_simplified$hpa
+)
+
+MetroPopup <- paste0("Metro Area: ", 
+                     metros_simplified$NAME, 
+                    "<br> Annual Price Change: ", 
+                     metros_simplified$hpa, "%"
+                    )
+
+leaf_metro_1 <- leaflet(metros_simplified) %>% 
+  addProviderTiles("CartoDB.Positron") %>%   
+  setView(-95, 40, zoom = 4) %>% 
+  addPolygons(stroke = TRUE, color = "black", weight = .4, opacity = 1.0, smoothFactor = 0.5, 
+             fill = TRUE, fillColor = ~HpaPal(hpa), fillOpacity = .8, layerId = ~NAME, popup =
+             MetroPopup)
+```
+
+House Prices by Metro {data-orientation=rows}
+=====================================
+
+
+Row {data-height=650}
+-------------------------------------
+
+### Metros Shaded by Annual Housing Price Change
+
+```{r, context = "render",  echo = FALSE}
+
+leafletOutput("metromap1")
+```
+
+```{r, context = "server"}
+output$metromap1 <- renderLeaflet({
+    leaf_metro_1
+  })
+
+```
+
+Row {data-height=350}
+-------------------------------------
+
+### Metro HPI over Time (indexed to 100 in year 2000)
+
+```{r, context = "render", echo = FALSE}
+
+dygraphOutput("dygraph1")
+```
+
+```{r, context = "server"}
+# Get the metro area that was clicked
+
+clickedMetro1 <- eventReactive(input$metromap1_shape_click, {
+     return(input$metromap1_shape_click$id)
+     })
+# create the dyrgraph that will be rendered
+
+output$dygraph1 <- renderDygraph({
+      
+      dygraph(metros_All_xts[, as.character(clickedMetro1())], main = clickedMetro1()) %>%
+      dyRangeSelector(height = 20) %>%
+      dyAxis("y", label = "HPI", axisLabelFontSize = 10, axisLabelWidth = 70) %>% 
+      dyLimit(100, color = "red")
+})
+```
+
+
+Metros with Dynamic Shading {data-orientation=rows}
+=====================================
+
+Column {.sidebar data-width=200}
+-------------------------------------
+  
+```{r, context = "render"}
+helpText("Choose a radio button to change the way the map is shaded.")
+
+radioButtons("indicator", "Color scheme",
+               c("Annual HPI Change" = "hpa",
+                 "Difference from pre-08 max" = "Pre08MaxDiff",
+                 "Increase from post-08 trough" = "PostCrashTroughDiff"))
+```
+
+Row {data-height=650}
+-------------------------------------
+
+### USA Metros
+
+```{r, context = "render", echo = FALSE}
+
+leafletOutput("metromap2")
+```
+
+```{r, context = "server"}
+output$metromap2 <- renderLeaflet({
+    leaf_metro_1
+  })
+
+observeEvent(input$indicator, {
+      #  let's create a new palette based on the input selected
+      indicator <- as.character(input$indicator)
+      
+      Pal <- colorNumeric( 
+        palette = "GnBu",
+        domain = metros_simplified[[indicator]]
+        )
+      
+      MetroPopup <- paste0("<strong>Metro Area: </strong><br>", 
+                     metros_simplified$NAME,"<br>",  
+                     indicator, ":",
+                     metros_simplified[[indicator]], "%"
+                    )
+      
+      leafletProxy( "metromap2", data = metros_simplified) %>%
+        removeShape( layerId = ~NAME ) %>%
+        addProviderTiles("CartoDB.Positron") %>%   
+        setView(-95, 40, zoom = 4) %>%
+        addPolygons(stroke = TRUE, color = "black", weight = .4, opacity = 1.0, 
+                    smoothFactor = 0.5, fill = TRUE, fillColor = ~Pal(metros_simplified[[indicator]]), 
+                    fillOpacity = .8, layerId = ~NAME, popup = MetroPopup)
+    })
+
+```

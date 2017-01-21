@@ -1,0 +1,9 @@
+base
+shiny
+flexdashboard
+dygraphs
+leaflet
+stringr
+DT
+data.table
+sp

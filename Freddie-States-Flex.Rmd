@@ -1,0 +1,81 @@
+---
+title: "Freddie Flex Vignette"
+resource_files:
+- FreddieFlexDataGrab.R
+- SourceData.RDat
+runtime: shiny
+output:
+  flexdashboard::flex_dashboard:
+    source_code: embed
+---
+
+```{r setup, include=FALSE}
+# Load packages and initialize data here
+library(flexdashboard)
+library(dygraphs)
+library(leaflet)
+library(stringr)
+
+##load data
+load('SourceData.RDat')
+
+###build states map
+statesPal<-colorNumeric(
+  palette = "GnBu",
+  domain = states500k$hpa)
+
+statesPopup <- paste0( 
+                    states500k$NAME,
+                    "<br>Annual House Price Percent Change: ", 
+                     states500k$hpa, "%")
+
+leaf_states <- leaflet(states500k) %>% addProviderTiles("CartoDB.Positron") %>%   
+  setView(-95, 40, zoom = 4) %>% 
+  addPolygons(stroke = TRUE, color = "black", weight = .4, opacity = 1.0, smoothFactor = 0.5, 
+  fill = TRUE, fillColor = ~statesPal(hpa), fillOpacity = .8, layerId = ~STATEABB, popup =    
+  statesPopup) %>% 
+  addLegend("bottomright", pal = statesPal, values = ~hpa, title = "Annual HPA", labFormat =
+              labelFormat(suffix = "%"),opacity = 1)
+```
+
+
+House Prices by State {data-orientation=rows}
+=====================================
+
+Row {data-height=650}
+-------------------------------------
+
+### USA States
+
+```{r, echo = FALSE}
+
+leafletOutput("map3")
+
+  output$map3 <- renderLeaflet({
+    leaf_states
+  })
+```
+
+Row {data-height=350}
+-------------------------------------
+
+### State HPI over Time (indexed to 100 in year 2000)
+
+```{r}
+
+dygraphOutput("dygraph3")
+
+##when we built the map, the "id" was set to "STATEABB"; when clicked, capture that abbreviation
+clickedState <- eventReactive(input$map3_shape_click, {
+     return(input$map3_shape_click$id)
+     })
+
+output$dygraph3 <- renderDygraph({
+      dygraph(states_xts[, as.character(clickedState())], main = clickedState()) %>%
+      dyRangeSelector(height = 20) %>%
+      dyAxis("y", label = "HPI", axisLabelFontSize = 10, axisLabelWidth = 70) %>% 
+      dyLimit(100, color = "red")
+})
+```
+
+

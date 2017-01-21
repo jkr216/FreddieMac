@@ -21,6 +21,8 @@ Metros_Only_500k <- subset(metros500k, metros500k$LSAD %in% c("M1"))
 Metros_Only_500k<-Metros_Only_500k[!grepl(", PR", Metros_Only_500k$NAME),]
 Metros_Only_500k <-Metros_Only_500k[order(Metros_Only_500k$NAME),]
 
+head(Metros_Only_500k$NAME)
+
 ##get the metro county data sheet 1, remove first 4 rows and last blank rows
 msas_AL <- read_excel("msas_new.xls", 
                        sheet = "MSA Indices A-L", skip = 4)
@@ -85,8 +87,21 @@ metros_08_to_15<- metros_All %>%
 
 Metros_Only_500k$PostCrashTroughDiff <- round(Metros$`2016-06-01` - metros_08_to_15$minHPI, digits =2)
 
+metros_All_xts <-xts(metros_All, order.by=as.Date(metros_All$date))
 
 ###################STATES########################
+
+library(rgdal)
+library(sp)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(stringr)
+library(readxl)
+library(zoo)
+library(reshape2)
+library(xts)
 
 ##get state shapefile
 states500k<-readOGR(".", "cb_2015_us_state_500k", verbose = FALSE)
@@ -95,8 +110,10 @@ states500k<-states500k[!grepl(paste(removeTerrs, collapse = '|'), states500k$NAM
 colnames(states500k@data)[5] <- "STATEABB"
 states500k <-states500k[order(states500k$STATEABB),]
 
+head(states500k$STATEABB)
+
 ##get the state data to start playing with
-states   <- read_excel("~/FreddieMac/states.xls", 
+states   <- read_excel("states.xls", 
                        skip = 4)
 
 ##rename the columns by state abbreviation and remove the unneeded rows at the bottom
@@ -111,12 +128,8 @@ states$date<-seq(mdy('01/01/1975'),mdy('03/01/2016'),by='months')
 ##because of the characters in the original excel file
 states[,c(2:52)] = apply(states[,c(2:52)], 2, function(x) as.numeric(x))
 
-##another way to accomplish the same thing turn to numeric first, then add date
-##states <- lapply(states[,2:54], as.numeric)
-##states$date<-seq(mdy('01/01/1975'),mdy(names <- c("United", "DC")
-
-##remove the last two columns, because those united states adujusted. 
-##states_DC<-states[,-53:-54]
+##create an xts object. why? Dygraphs needs one, that's why.
+states_xts <-xts(states, order.by = as.Date(states$date))
 
 StatesHpa <-states %>%  
   filter(date == ymd("2016-03-01") | date == ymd("2015-03-01")) %>%
@@ -125,18 +138,8 @@ StatesHpa <-states %>%
   mutate(hpa= (((1+(.[[3]]-.[[2]])/.[[2]])^1)-1)*100) %>% 
   mutate(hpa = round(hpa, digits =2))
 
+##add it to the shapefile
 states500k$hpa <- StatesHpa$hpa
 
-states_00_08<- states %>%  
-  gather("state", "maxHPI", -date) %>% 
-  filter(date > "2000-01-01" & date <"2008-06-01") %>%
-  group_by(state) %>% 
-  top_n(1, maxHPI) 
-
-states500k$PeakDiff <- round(StatesHpa$`2016-03-01` - states_00_08$maxHPI, digits =2)
-
-##create an xts object. why? Dygraphs needs one, that's why.
-metros_All_xts <-xts(metros_All, order.by=as.Date(metros_All$date))
-states_xts <-xts(states, order.by = as.Date(states$date))
 ### Save
 save(metros_All_xts, Metros_Only_500k, states_xts, states500k, metros_All, file = 'SourceData.RDat')

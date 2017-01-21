@@ -4,14 +4,12 @@ output: html_notebook
 ---
 
 
-```{r, context = "setup", include = FALSE}
+```{r, context = "setup", message = FALSE}
 library(rgdal)
 library(sp)
-library(readr)
 library(dplyr)
 library(tidyr)
 library(lubridate)
-library(stringr)
 library(readxl)
 library(rmapshaper)
 library(xts)
@@ -20,18 +18,19 @@ library(httr)
 ```
 
 
-```{r}
+```{r, results = "hide"}
 # Load the cbsa shapefile
-# This file can be downloaded using this code
+# This file can be downloaded from the u US Census.
+
  tmp <- tempfile()
 
  httr::GET("http://www2.census.gov/geo/tiger/GENZ2015/shp/cb_2015_us_cbsa_500k.zip", write_disk(tmp))
+ 
  unzip(tmp, exdir = 'cb_2015_us_cbsa_500k')
-#
- MSA <- readOGR("./cb_2015_us_cbsa_500k", 'cb_2015_us_cbsa_500k', verbose = FALSE)
-#
 
-# remove the micros because we are building a map of metros only
+ MSA <- readOGR("./cb_2015_us_cbsa_500k", 'cb_2015_us_cbsa_500k', verbose = FALSE)
+
+# Remove the micros because we are building a map of metros only
 # After this command, we will have a shapefile of the 382 metro
 # areas in the USA.
 
@@ -48,7 +47,7 @@ metros<-metros[order(metros$NAME),]
 
 ```
 
-```{r}
+```{r, message = FALSE}
 
 # Let's simplify the shape file using ms_simplify from rmapshaper
 
@@ -60,11 +59,12 @@ metros_simplified@polygons[[1]]@Polygons[[1]]@coords
 ```
 
 
-```{r, echo = FALSE}
+```{r, results = "hide"}
 
 # Now we need some time series data and we'll get it from the Freddie Mac homepage.
 # Freddie publishes data on housing price indexes for all metro areas. 
-# We need to download those spreadsheets and then get them into xts object.
+# We need to download those spreadsheets, load into our R environment, and do some
+# tidying/combining/manipulating.
 # Let's do that now.
 
 
@@ -81,24 +81,24 @@ colnames(msas_MZ)=msas_MZ[1,]
 msas_MZ=msas_MZ[c(-1, -503:-519),-1]
 
 
-# combine metros areas into one dataframe and conver to numeric
+# Combine metros areas into one dataframe and conver to numeric
 metros_All <- cbind(msas_AL,msas_MZ)
 cols = c(2:382)    
 metros_All[,cols] = apply(metros_All[,cols], 2, function(x) as.numeric(as.character(x)))
 
-# get rid of the cycle column, make it into a date and rename it 'date'
+# Get rid of the cycle column, make it into a date and rename it 'date'
 metros_All$Month<-seq(mdy('01/01/1975'),mdy('09/01/2016'),by='months')
 colnames(metros_All)[1] <- "date"
 
-# have a peek and confirm that metros_all has 381 metros columns. 
-# Rememeber: there's a 'date' column too, so the total will be 382 columns
-# dim(metros_All)
+# Dygraphs wants a time series, so let's create an xts object.
+metros_All_xts <- xts(metros_All, order.by=metros_All$date)
+
 ```
 
-```{r}
-# Now for our first mesh point: let's rename the metros in our shapefile with the same name as we use in
-# our prices dataframe. Why are we doing this? 
-# We want to be able to click the shapefile and pull in a time series and the naming
+```{r, message = FALSE, results = "hide"}
+# Now for our first mesh point between shapefile and the house price data: let's rename the metros in our
+# shapefile with the same name as we use in our prices dataframe. Why are we doing this? 
+# We want to be able to click the shapefile and pull in a timeseries and the naming
 # conventions need to be identical.
 
 metros_simplified$NAME <- colnames(metros_All)[2:382]
@@ -107,7 +107,8 @@ metros_simplified$NAME <- colnames(metros_All)[2:382]
 ```{r}
 # Now we want to add some values so we can create different palettes. We'll use the HPI dataframe. 
 # Create a data frame with the last year of hpi's
-# and an hpa column
+# and an hpa column.
+
 Palettes <-  metros_All %>%  
   filter(date == ymd("2016-06-01") | date == ymd("2015-06-01")) %>%
   gather(metro, value, -date) %>%
@@ -139,8 +140,6 @@ metros_simplified$PostCrashTroughDiff <- round(Palettes$`2016-06-01` - metros_08
 ```
 
 ```{r}
-# Dygraphs wants a time series, so let's conver to an xts object.
-metros_All_xts <-xts(metros_All, order.by=metros_All$date)
 # Save
 save(metros_All_xts, metros_simplified, file = 'metrosData.RDat')
 ```
