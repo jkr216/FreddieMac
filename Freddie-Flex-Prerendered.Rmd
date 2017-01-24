@@ -23,7 +23,7 @@ load('metrosData.RDat')
 
 ##build metros map
 HpaPal<-colorNumeric(
-  palette = "GnBu",
+  palette = "RdYlGn",
   domain = metros_simplified$hpa
 )
 
@@ -125,7 +125,7 @@ observeEvent(input$indicator, {
       indicator <- as.character(input$indicator)
       
       Pal <- colorNumeric( 
-        palette = "GnBu",
+        palette = "RdYlGn",
         domain = metros_simplified[[indicator]]
         )
       

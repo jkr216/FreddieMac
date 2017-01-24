@@ -39,13 +39,21 @@ metros <- subset(MSA, MSA$LSAD %in% c("M1"))
 # Remove Puerto Rico because Freddie's data doesn't include it.
 # Now there will be 381 observations in @data portion of the shapefile
 
-metros <- metros[!grepl(", PR", metros$NAME),]
+metros <- metros[!grepl(", PR", metros$NAME),] 
+
+# Change naming convention of 'St.' and 'Saint' so alphabetizing works how we want
+ 
+metros$NAME <- fct_recode(metros$NAME, "Saint Cloud, MN" = "St. Cloud, MN",  "Saint George, UT" = "St. George, UT",  "Saint Joseph, MO-KS" = "St. Joseph, MO-KS",  "Saint Louis, MO-IL" = "St. Louis, MO-IL")
+
+metros$NAME <- as.character(metros$NAME)
 
 # Alphabetize so can synch with the housing price data time series
 
-metros<-metros[order(metros$NAME),]
+metros <- metros[order(metros$NAME),]
 
 ```
+
+
 
 ```{r, message = FALSE}
 
@@ -102,6 +110,7 @@ metros_All_xts <- xts(metros_All, order.by=metros_All$date)
 # conventions need to be identical.
 
 metros_simplified$NAME <- colnames(metros_All)[2:382]
+colnames(metros_All)
 ```
 
 ```{r}
